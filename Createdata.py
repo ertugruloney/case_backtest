@@ -1,35 +1,62 @@
 import ccxt
 import pandas as pd
 from datetime import datetime
-
+import time
+import time
+from datetime import datetime, timedelta
 # Binance borsasına bağlan
-binance = ccxt.binance()
+binance = ccxt.binance({'options': {
+        'defaultType': 'future'  # Futures verisi için
+    }})
 
-# Tarihleri belirle (Kasım ayı için)
-start_date = '2024-11-01 00:00:00'
-end_date = '2024-11-30 23:59:59'
+def fetch_ohlcv_with_pagination(exchange, symbol, start_time, end_time, timeframe='1m', limit=1000):
+    """Veri çekme süresini bölerek zaman dilimleri arasında ilerleyerek veri çeker."""
+    all_candles = []
+    while start_time < end_time:
+        try:
+            candles = exchange.fetch_ohlcv(symbol, timeframe, since=start_time, limit=limit)
+            if not candles:
+                break
+            all_candles.extend(candles)
+            # Son mumun timestamp'ını alarak bir sonraki istek için yeni start_time olarak kullanıyoruz
+            start_time = candles[-1][0] + 1  # Yeni başlangıç zamanı, son mumun timestamp'ı + 1ms
+            time.sleep(1)  # Rate limiting'e karşı kısa bir bekleme süresi
+        except Exception as e:
+            print(f"Error fetching {symbol} from {exchange.id}: {e}")
+            break
+    return all_candles
 
-# Timestamps'e çevir
-start_timestamp = int(datetime.strptime(start_date, '%Y-%m-%d %H:%M:%S').timestamp() * 1000)
-end_timestamp = int(datetime.strptime(end_date, '%Y-%m-%d %H:%M:%S').timestamp() * 1000)
-
-# Veri çekme
-symbol = 'BTC/USDT'
 timeframe = '1h'
+days = 30
+# Kullanılacak borsalar
+  
+# Zaman aralıkları
+end_time = int(datetime.utcnow().timestamp() * 1000)  # Şu anki zaman
+start_time = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)  # 6 gün önce
 
-ohlcv = []
-while start_timestamp < end_timestamp:
-    data = binance.fetch_ohlcv(symbol, timeframe, since=start_timestamp, limit=1000)
-    if not data:
-        break
-    ohlcv += data
-    start_timestamp = data[-1][0] + 3600000  # 1 saat ekle
 
-# DataFrame'e çevir
-columns = ['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume']
-df = pd.DataFrame(ohlcv, columns=columns)
-df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+markets = binance.load_markets()
 
-# Dosyaya kaydet
-df.to_csv('btc_data.csv', index=False) 
-print("Veriler başarıyla kaydedildi!")
+# USDT bazlı coinleri filtrele
+usdt_pairs = [market for market in markets if market.endswith('/USDT')]
+
+
+for symbol in usdt_pairs:
+        exchange_name="binance"
+        exchange = getattr(ccxt, exchange_name)()
+        exchange.load_markets()
+        a=symbol.split("/")
+    
+
+        print(f"{exchange_name} - {symbol} verileri çekiliyor...")
+        candles = fetch_ohlcv_with_pagination(exchange, symbol, start_time, end_time, timeframe)
+        if candles:
+            # Veriyi pandas DataFrame'e çevirme ve CSV'ye kaydetme
+            df = pd.DataFrame(candles, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            filename = f"{a[0]}.csv"
+            filename = "coins/" + filename
+            df.to_csv(filename, index=False)
+            print(f"{symbol} için veri kaydedildi: {filename}")
+        else:
+            print(f"{symbol} için veri bulunamadı.")

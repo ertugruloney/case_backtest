@@ -73,3 +73,6 @@ When evaluating the results, 3 months were taken as a basis, September 2024, Oct
 
  The results are given in a special table and when the results are analyzed, a minimum profitability increase of 30% was achieved.
 
+docker build -t my-app .
+
+docker run -v /Users/ertugruloney/Desktop/casemdp/casemain/Hiperparameters.csv:/app/Hiperparameters.csv my-app
